@@ -8,14 +8,20 @@ class Board:
         # grid[row][col]: [0][0] - top, left; [7][7] - botton, right
         self.grid: List[List[Optional[Piece]]] = [[None]*8 for _ in range(8)]
         self._setup_pieces()
-    
+
     def is_on_board(self, pos: Position) -> bool:
         r, c = pos
         return 0 <= r < 8 and 0 <= c < 8
 
+    def _place(self, piece: Piece, pos: Position):
+        r, c = pos
+        self.grid[r][c] = piece
+        piece.position = (r, c)
+
     def _setup_pieces(self):
         """Place pieces in starting positions."""
-        # Default starting position
+        # clear board
+        self.grid = [[None]*8 for _ in range(8)]
         # Kings
         self.grid[7][4] = King("white")
         self.grid[0][4] = King("black")
@@ -50,11 +56,6 @@ class Board:
     def get_piece(self, pos):
         row, col = pos
         return self.grid[row][col]
-
-    def _place(self, piece: Piece, pos: Position):
-        r, c = pos
-        self.grid[r][c] = piece
-        piece.position = (r, c)
 
     def move_piece(self, start: Position, end: Position):
         """Execute move without validation. Handles capture and promotion (to queen)."""
@@ -100,3 +101,51 @@ class Board:
                 if pos in pseudo:
                     return True
         return False
+    
+    def clone(self) -> "Board":
+        """Create a deep-ish clone for move simulation (pieces cloned, positions preserved)."""
+        new = Board.__new__(Board)  # bypass __init__
+        new.grid = [[None]*8 for _ in range(8)]
+        for r in range(8):
+            for c in range(8):
+                p = self.grid[r][c]
+                if p is not None:
+                    p_clone = p.clone()
+                    new.grid[r][c] = p_clone
+                    p_clone.position = (r, c)
+        return new
+    
+    def is_in_check(self, color: str) -> bool:
+        king_pos = self.find_king(color)
+        if king_pos is None:
+            # Shouldn't happen in a normal game; treat as in-check to be safe
+            return True
+        enemy = "white" if color == "black" else "black"
+        return self.is_square_attacked(king_pos, enemy)
+    
+    def get_legal_moves_for_piece(self, pos: Position) -> List[Position]:
+        """Return moves for piece at pos, filtered so king isn't left in check."""
+        piece = self.get_piece(pos)
+        if piece is None:
+            return []
+        pseudo = piece.get_pseudo_legal_moves(self)
+        legal = []
+        for dest in pseudo:
+            # simulate move on cloned board
+            b_clone = self.clone()
+            b_clone.move_piece(pos, dest)
+            if not b_clone.is_in_check(piece.color):
+                legal.append(dest)
+        return legal
+    
+    def get_all_legal_moves(self, color: str):
+        """Return dict mapping piece positions -> legal destinations."""
+        moves = {}
+        for r in range(8):
+            for c in range(8):
+                p = self.grid[r][c]
+                if p and p.color == color:
+                    lm = self.get_legal_moves_for_piece((r,c))
+                    if lm:
+                        moves[(r,c)] = lm
+        return moves

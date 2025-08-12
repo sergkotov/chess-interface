@@ -117,16 +117,16 @@ class Board:
         return None
 
     def is_square_attacked(self, pos: Position, by_color: str) -> bool:
-        """Return True if any piece of by_color attacks pos (ignores pins)."""
         for r in range(8):
             for c in range(8):
                 p = self.grid[r][c]
                 if p is None or p.color != by_color:
                     continue
-                # set temporary pos to ensure piece has position attribute
-                # p.position should already be correct
-                pseudo = p.get_pseudo_legal_moves(self)
-                if pos in pseudo:
+                if isinstance(p, King):
+                    moves = p.get_pseudo_legal_moves(self, for_attack=True)
+                else:
+                    moves = p.get_pseudo_legal_moves(self)
+                if pos in moves:
                     return True
         return False
     

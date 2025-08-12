@@ -31,20 +31,49 @@ class King(Piece):
     def __init__(self, color: str):
         super().__init__(color, "king")
 
-    def get_pseudo_legal_moves(self, board):
+    def get_pseudo_legal_moves(self, board, for_attack=False):
         moves = []
+        directions = [(-1,-1), (-1,0), (-1,1), (0,-1), (0,1), (1,-1), (1,0), (1,1)]
         r, c = self.position
-        for dr in (-1,0,1):
-            for dc in (-1,0,1):
-                if dr == 0 and dc == 0:
-                    continue
-                pos = (r+dr, c+dc)
-                if board.is_on_board(pos):
-                    target = board.get_piece(pos)
-                    if target is None or target.color != self.color:
-                        moves.append(pos)
-        # Note: castling not implemented here
+        for dr, dc in directions:
+            pos = (r+dr, c+dc)
+            if board.is_on_board(pos):
+                target = board.get_piece(pos)
+                if target is None or target.color != self.color:
+                    moves.append(pos)
+        if not for_attack and not self.has_moved:
+            # Kingside
+            if self._can_castle(board, kingside=True):
+                moves.append((r, c + 2))
+            # Queenside
+            if self._can_castle(board, kingside=False):
+                moves.append((r, c - 2))
+
         return moves
+
+
+    def _can_castle(self, board, kingside: bool) -> bool:
+        r, c = self.position
+        back_rank = r
+        if kingside:
+            rook_pos = (back_rank, 7)
+            empty_squares = [(r, c+1), (r, c+2)]
+        else:
+            rook_pos = (back_rank, 0)
+            empty_squares = [(r, c-1), (r, c-2), (r, c-3)]
+
+        rook = board.get_piece(rook_pos)
+        if not rook or rook.has_moved:
+            return False
+        # Squares between king and rook must be empty
+        for sq in empty_squares:
+            if board.get_piece(sq) is not None:
+                return False
+        # Squares the king passes through must not be attacked
+        for sq in [(r, c), (r, c + (2 if kingside else -2)), (r, c + (1 if kingside else -1))]:
+            if board.is_square_attacked(sq, "white" if self.color == "black" else "black"):
+                return False
+        return True
 
 class SlidingPiece(Piece):
     """Shared logic for rook, bishop, queen."""

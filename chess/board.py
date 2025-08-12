@@ -7,6 +7,7 @@ class Board:
     def __init__(self):
         # grid[row][col]: [0][0] - top, left; [7][7] - botton, right
         self.grid: List[List[Optional[Piece]]] = [[None]*8 for _ in range(8)]
+        self.en_passant_target: Optional[Position] = None
         self._setup_pieces()
 
     def is_on_board(self, pos: Position) -> bool:
@@ -22,6 +23,7 @@ class Board:
         """Place pieces in starting positions."""
         # clear board
         self.grid = [[None]*8 for _ in range(8)]
+        self.en_passant_target = None
         # Kings
         self.grid[7][4] = King("white")
         self.grid[0][4] = King("black")
@@ -62,23 +64,49 @@ class Board:
         piece = self.get_piece(start)
         if piece is None:
             raise ValueError(f"No piece at {start}")
-        # capture if any
-        target = self.get_piece(end)
-        if target is not None:
-            # captured - just replace
-            pass
-        # move
+
+        # --- En passant capture (use current en_passant_target if set) ---
+        if isinstance(piece, Pawn) and self.en_passant_target is not None and end == self.en_passant_target:
+            # The pawn being captured sits behind the target square (relative to the mover)
+            direction = -1 if piece.color == "white" else 1
+            captured_pos = (end[0] - direction, end[1])
+            self.grid[captured_pos[0]][captured_pos[1]] = None
+
+        # --- Castling: move rook accordingly if king moves two squares ---
+        if isinstance(piece, King) and abs(end[1] - start[1]) == 2:
+            back_rank = start[0]
+            if end[1] == 6:  # kingside
+                rook_start = (back_rank, 7)
+                rook_end = (back_rank, 5)
+            else:  # queenside
+                rook_start = (back_rank, 0)
+                rook_end = (back_rank, 3)
+            rook = self.get_piece(rook_start)
+            if rook:
+                self.grid[rook_end[0]][rook_end[1]] = rook
+                self.grid[rook_start[0]][rook_start[1]] = None
+                rook.position = rook_end
+                rook.has_moved = True
+
+        # --- Move the piece itself ---
         self.grid[end[0]][end[1]] = piece
         self.grid[start[0]][start[1]] = None
         piece.position = end
+        piece.has_moved = True
 
-        # Pawn promotion hook: promote automatically to queen when reaching last rank
+        # --- Pawn promotion (auto-queen) ---
         if isinstance(piece, Pawn):
             last_row = 0 if piece.color == "white" else 7
             if end[0] == last_row:
-                # promote to Queen (simple default)
                 promoted = Queen(piece.color)
+                promoted.has_moved = True
                 self._place(promoted, end)
+
+        # --- Update en_passant_target: default clear, set only for pawn double-move ---
+        self.en_passant_target = None
+        if isinstance(piece, Pawn) and abs(end[0] - start[0]) == 2:
+            middle_row = (start[0] + end[0]) // 2
+            self.en_passant_target = (middle_row, start[1])
 
     def find_king(self, color: str) -> Optional[Position]:
         for r in range(8):
@@ -106,6 +134,7 @@ class Board:
         """Create a deep-ish clone for move simulation (pieces cloned, positions preserved)."""
         new = Board.__new__(Board)  # bypass __init__
         new.grid = [[None]*8 for _ in range(8)]
+        new.en_passant_target = None if self.en_passant_target is None else (self.en_passant_target[0], self.en_passant_target[1])
         for r in range(8):
             for c in range(8):
                 p = self.grid[r][c]

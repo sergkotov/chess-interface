@@ -32,9 +32,7 @@ class Game:
             # switch turn
             self.current_turn = "black" if self.current_turn == "white" else "white"
             return True
-        else:
-            # invalid move
-            return False
+        return False
 
     def get_legal_destinations(self, pos):
         return self.board.get_legal_moves_for_piece(pos)

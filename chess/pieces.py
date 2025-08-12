@@ -8,6 +8,7 @@ class Piece:
         self.color = color
         self.name = name
         self.position: Optional[Position] = None
+        self.has_moved = False
 
     def clone(self):
         """Return a lightweight clone for move simulation."""
@@ -15,6 +16,7 @@ class Piece:
         new = cls(self.color)
         new.position = None if self.position is None else (
             self.position[0], self.position[1])
+        new.has_moved = self.has_moved
         return new
 
     def get_pseudo_legal_moves(self, board) -> List[Position]:
@@ -107,11 +109,10 @@ class Pawn(Piece):
         moves = []
         r, c = self.position
         direction = -1 if self.color == "white" else 1
-        # One square forward
+        # Forward
         forward = (r + direction, c)
         if board.is_on_board(forward) and board.get_piece(forward) is None:
             moves.append(forward)
-            # Two squares from starting rank
             start_row = 1 if self.color == "black" else 6
             two_forward = (r + 2*direction, c)
             if r == start_row and board.get_piece(two_forward) is None:
@@ -123,5 +124,10 @@ class Pawn(Piece):
                 target = board.get_piece(cap)
                 if target and target.color != self.color:
                     moves.append(cap)
-        # Note: en-passant not implemented
+        # En-passant
+        if board.en_passant_target:
+            ep_row, ep_col = board.en_passant_target
+            if r + direction == ep_row and abs(ep_col - c) == 1:
+                moves.append((ep_row, ep_col))
+
         return moves
